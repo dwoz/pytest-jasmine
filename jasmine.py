@@ -25,16 +25,19 @@ def driver_ctx(name="chrome", **kwargs):
     driver.set_window_size(1400, 1000)
     yield driver
     driver.close()
-    import signal
+    # TODO: Really seems like this shouldn't bee needed. At the very leasg
+    # SIGEXIT seems more appropriate but that doesnt' seem to work for some
+    # versions of phantomjs
     driver.service.process.send_signal(signal.SIGKILL)
     driver.quit()
 
 
-def wait_for_results(driver):
-    #WebDriverWait(driver, 100).until(
-    #    lambda driver:
-    #    driver.execute_script("return document.readyState === 'complete';")
-    #)
+def wait_for_results(driver, ready_wait=False):
+    if ready_wait:
+        WebDriverWait(driver, 100).until(
+            lambda driver:
+            driver.execute_script("return document.readyState === 'complete';")
+        )
     WebDriverWait(driver, 100).until(
         lambda driver:
         driver.execute_script("return jsApiReporter.finished;")
@@ -87,10 +90,9 @@ class JasmineItem(pytest.Item):
 
     @property
     def originalname(self):
-        return 'asdfsd'
+        return ''
 
     def _getfailureheadline(self, rep):
-        return 'mmmm'
         if hasattr(rep, 'location'):
             fspath, lineno, domain = rep.location
             return domain
@@ -103,7 +105,6 @@ class JasmineItem(pytest.Item):
         return self._location
 
 
-
 class JasmineCollector(pytest.Collector):
 
     def __init__(self, url, *args, **kwargs):
@@ -113,8 +114,8 @@ class JasmineCollector(pytest.Collector):
 
     def collect(self):
         items = []
-#        print("Begin Jasmine collection: {}".format(self.url))
-        #with driver_ctx('phantomjs', service_args=["--debug=yes","--remote-debugger-port=9000"]) as driver:
+        # print("Begin Jasmine collection: {}".format(self.url))
+        # with driver_ctx('phantomjs', service_args=["--debug=yes","--remote-debugger-port=9000"]) as driver:
         with driver_ctx('phantomjs', service_args=['--debug=yes']) as driver:
             driver.get(self.url)
             wait_for_results(driver)
@@ -124,6 +125,8 @@ class JasmineCollector(pytest.Collector):
 
     def reportinfo(self):
         return ('.', False, "")
+
+
 class JasminePath(FSBase):
 
     def __init__(self, path, expanduser=False):
