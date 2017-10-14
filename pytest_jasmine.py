@@ -12,9 +12,14 @@ from py._path.local import FSBase
 
 import pytest
 
-NOOP = '__pytest_jasmin_NOOP'
+
+NOOP = '__pytest_jasmine_NOOP'
+
 
 def driver_class(name="chrome"):
+    '''
+    Lookup a WebDriver class from the given driver name
+    '''
     mod = getattr(webdriver, name, None)
     if not mod:
         raise Exception
@@ -23,6 +28,9 @@ def driver_class(name="chrome"):
 
 @contextlib.contextmanager
 def driver_ctx(name="chrome", **kwargs):
+    '''
+    Selenium WebDriver context manager.
+    '''
     cls = driver_class(name)
     driver = cls(**kwargs)
     driver.set_window_size(1400, 1000)
@@ -36,6 +44,9 @@ def driver_ctx(name="chrome", **kwargs):
 
 
 def wait_for_results(driver, ready_wait=False):
+    '''
+    Wait for the Jasmine test suite to finish
+    '''
     if ready_wait:
         WebDriverWait(driver, 100).until(
             lambda driver:
@@ -48,6 +59,9 @@ def wait_for_results(driver, ready_wait=False):
 
 
 def results(driver):
+    '''
+    Collect Jasmine test results from the webdriver instance.
+    '''
     batch_size = 10
     spec_results = []
     index = 0
@@ -66,16 +80,26 @@ def results(driver):
     return spec_results
 
 
-class JasmineException(Exception): pass
+class JasmineException(Exception):
+    '''
+    Exception class to be raised if the Jasmine plugin experiences an error
+    '''
 
 
 class Jasmine(object):
+    '''
+    Configure Jasmine test suite url
+    '''
+
     def __init__(self, url=None, driver_name='phantomjs'):
         self.url = url
         self.driver_name = driver_name
 
 
 class JasmineItem(pytest.Item):
+    '''
+    Represents a single Jasmine test
+    '''
 
     def __init__(self, name, parent, spec):
         super(JasmineItem, self).__init__(name, parent)
