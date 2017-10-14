@@ -18,7 +18,7 @@ setup(
     ],
     entry_points = {
         'pytest11': [
-            'jasmine = jasmine',
+            'jasmine = pytest_jasmine',
         ]
     },
     classifiers=[
