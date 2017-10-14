@@ -125,7 +125,7 @@ class JasmineCollector(pytest.Collector):
         # print("Begin Jasmine collection: {}".format(self.url))
         # with driver_ctx('phantomjs', service_args=["--debug=yes","--remote-debugger-port=9000"]) as driver:
         #with driver_ctx('phantomjs', service_args=['--debug=yes']) as driver:
-        with driver_ctx('phantomjs', service_args=['--debug=yes']) as driver:
+        with driver_ctx(self.driver_name, service_args=['--debug=yes']) as driver:
             driver.get(self.url)
             wait_for_results(driver)
             for i in results(driver):
