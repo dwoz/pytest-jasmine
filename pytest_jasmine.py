@@ -12,6 +12,7 @@ from py._path.local import FSBase
 
 import pytest
 
+NOOP = '__pytest_jasmin_NOOP'
 
 def driver_class(name="chrome"):
     mod = getattr(webdriver, name, None)
