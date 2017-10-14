@@ -30,4 +30,7 @@ setup(
         'Topic :: Utilities',
         'Framework :: Pytest',
     ],
+    install_requires=[
+        'selenium'
+    ]
 )
