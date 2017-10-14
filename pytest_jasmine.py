@@ -2,13 +2,15 @@
 Collect Jasmine tests from a url using selenium webdriver and display the
 results durring a pytest run.
 '''
+import contextlib
 import time
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium import webdriver
-from contextlib import contextmanager
 import signal
-import pytest
+
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
 from py._path.local import FSBase
+
+import pytest
 
 
 def driver_class(name="chrome"):
@@ -18,7 +20,7 @@ def driver_class(name="chrome"):
     return mod.webdriver.WebDriver
 
 
-@contextmanager
+@contextlib.contextmanager
 def driver_ctx(name="chrome", **kwargs):
     cls = driver_class(name)
     driver = cls(**kwargs)
@@ -106,6 +108,9 @@ class JasmineItem(pytest.Item):
 
 
 class JasmineCollector(pytest.Collector):
+    '''
+    Collect the jasmine tests.
+    '''
 
     def __init__(self, url, *args, **kwargs):
         self.url = url
@@ -128,6 +133,10 @@ class JasmineCollector(pytest.Collector):
 
 
 class JasminePath(FSBase):
+    '''
+    Path helper to oeverride the pytest path setting since the Jasmine tests
+    are not located at a filesystem path.
+    '''
 
     def __init__(self, path, expanduser=False):
         self.strpath = path
@@ -145,3 +154,44 @@ class JasminePath(FSBase):
         o = object.__new__(self.__class__)
         o.strpath = path
         return o
+
+
+def pytest_addoption(parser):
+    '''
+    Add pytest commandline options for the jasmine plugin
+    '''
+    parser.addoption(
+        "--with-jasmine",
+        #action='store_true',
+        default=NOOP,
+        nargs='?',
+        help='Run cassandra tests',
+    )
+
+
+def pytest_pycollect_makeitem(collector, name, obj):
+    '''
+    When the jasmine plugin in enabled add the Jasmine items to the Pytest
+    collector.
+    '''
+    url = pytest.config.option.with_jasmine
+    if url != NOOP and isinstance(obj, Jasmine):
+        if url is None:
+            url = obj.url
+        return JasmineCollector(url, parent=collector.parent)
+
+
+def pytest_collection_modifyitems(session, config, items):
+    '''
+    Provide sane output for the path portion of the test results.
+    '''
+    for item in items:
+        if isinstance(item, JasmineItem):
+            if config.option.verbose == 1:
+                name = JasminePath(item.parent.url)
+            else:
+                config.rootdir.join = JasminePath.alt_join.__get__(
+                    config.rootdir, config.rootdir.__class__
+                )
+                name = JasminePath(item.name)
+            item._location = (name, None, item.name)
