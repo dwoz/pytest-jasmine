@@ -70,8 +70,9 @@ class JasmineException(Exception): pass
 
 
 class Jasmine(object):
-    def __init__(self, url=None):
+    def __init__(self, url=None, driver_name='phantomjs'):
         self.url = url
+        self.driver_name = driver_name
 
 
 class JasmineItem(pytest.Item):
@@ -113,8 +114,9 @@ class JasmineCollector(pytest.Collector):
     Collect the jasmine tests.
     '''
 
-    def __init__(self, url, *args, **kwargs):
+    def __init__(self, url, driver_name, *args, **kwargs):
         self.url = url
+        self.driver_name = driver_name
         self._nodeid = url
         super(JasmineCollector, self).__init__(url, *args, **kwargs)
 
@@ -122,6 +124,7 @@ class JasmineCollector(pytest.Collector):
         items = []
         # print("Begin Jasmine collection: {}".format(self.url))
         # with driver_ctx('phantomjs', service_args=["--debug=yes","--remote-debugger-port=9000"]) as driver:
+        #with driver_ctx('phantomjs', service_args=['--debug=yes']) as driver:
         with driver_ctx('phantomjs', service_args=['--debug=yes']) as driver:
             driver.get(self.url)
             wait_for_results(driver)
@@ -179,7 +182,7 @@ def pytest_pycollect_makeitem(collector, name, obj):
     if url != NOOP and isinstance(obj, Jasmine):
         if url is None:
             url = obj.url
-        return JasmineCollector(url, parent=collector.parent)
+        return JasmineCollector(url, obj.driver_name, parent=collector.parent)
 
 
 def pytest_collection_modifyitems(session, config, items):
