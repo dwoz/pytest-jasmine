@@ -18,7 +18,7 @@ setup(
     ],
     entry_points = {
         'pytest11': [
-            'dataplugin = dataplugin',
+            'jasmine = jasmine',
         ]
     },
     classifiers=[
