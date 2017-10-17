@@ -16,86 +16,7 @@ import pytest
 
 NOOP = '__pytest_jasmine_NOOP'
 
-
-def driver_class(name="chrome"):
-    '''
-    Lookup a WebDriver class from the given driver name
-    '''
-    mod = getattr(webdriver, name, None)
-    if not mod:
-        raise Exception
-    return mod.webdriver.WebDriver
-
-
-def server_target(app, address, port):
-    app.configure({})
-    app.run(address, port, use_reloader=False, threaded=True)
-
-
-@contextlib.contextmanager
-def server_ctxt(app):
-    address = '127.0.0.1'
-    port = 9280
-    proc = multiprocessing.Process(target=server_target, args=(app, address, port))
-    try:
-        proc.start()
-        yield
-    finally:
-        proc.terminate()
-
-
-@contextlib.contextmanager
-def driver_ctx(name="chrome", **kwargs):
-    '''
-    Selenium WebDriver context manager.
-    '''
-    cls = driver_class(name)
-    driver = cls(**kwargs)
-    driver.set_window_size(1400, 1000)
-    yield driver
-    driver.close()
-    # TODO: Really seems like this shouldn't bee needed. At the very leasg
-    # SIGEXIT seems more appropriate but that doesnt' seem to work for some
-    # versions of phantomjs
-    driver.service.process.send_signal(signal.SIGKILL)
-    driver.quit()
-
-
-def wait_for_results(driver, ready_wait=False):
-    '''
-    Wait for the Jasmine test suite to finish
-    '''
-    if ready_wait:
-        WebDriverWait(driver, 100).until(
-            lambda driver:
-            driver.execute_script("return document.readyState === 'complete';")
-        )
-    WebDriverWait(driver, 100).until(
-        lambda driver:
-        driver.execute_script("return jsApiReporter.finished;")
-    )
-
-
-def results(driver):
-    '''
-    Collect Jasmine test results from the webdriver instance.
-    '''
-    batch_size = 10
-    spec_results = []
-    index = 0
-    while True:
-        results = driver.execute_script(
-            "return jsApiReporter.specResults({0}, {1})".format(
-                index,
-                batch_size
-            )
-        )
-        spec_results.extend(results)
-        index += len(results)
-
-        if not len(results) == batch_size:
-            break
-    return spec_results
+#kwargs={'use_reloader': False, 'threaded': True}
 
 
 class JasmineException(Exception):
@@ -103,16 +24,54 @@ class JasmineException(Exception):
     Exception class to be raised if the Jasmine plugin experiences an error
     '''
 
-
-class Jasmine(object):
+class JasmineTestSuite(object):
     '''
-    Configure Jasmine test suite url
+    Configuration for a Jasmine test suite
     '''
 
-    def __init__(self, app=None, url=None, driver_name='phantomjs'):
+    @property
+    def run_server(self):
+        return hasattr(self, 'app')
+
+    @property
+    def urls(self):
+        if hasattr(self, app):
+            return [
+                'http://{}:{}/{}'.format(self.app_host, self.app_port, spec_pth)
+                for spec_pth in self.spec_urls
+            ]
+
+
+class Jasmine(JasmineTestSuite):
+    '''
+    Jasmine test config, will run a local instance of the app and then run and
+    collecte Jasmine results using selenium webdriver.
+    '''
+
+    def __init__(
+            self, app=None, app_host='127.0.0.1', app_port=8921, app_args=None,
+            app_kwargs=None, spec_urls=None, driver_name='phantomjs',
+            driver_args=None, driver_kwargs=None):
         self.app = app
-        self.url = url
+        self.app_host = app_host
+        self.app_port = app_port
+        self.app_args = app_args
+        self.app_kwargs = app_kwargs
+        self.spec_urls = spec_urls
         self.driver_name = driver_name
+        self.driver_args = driver_args
+        self.driver_kwargs = driver_kwargs
+
+
+class RemoteJasmine(JasmineTests):
+
+    def __init__(
+            self, urls=None, driver_name='phantomjs', driver_args=None
+            driver_kwargs=None):
+        self.spec_urls = spec_urls
+        self.driver_name = driver_name
+        self.driver_args = driver_args
+        self.driver_kwargs = driver_kwargs
 
 
 class JasmineItem(pytest.Item):
@@ -157,30 +116,104 @@ class JasmineCollector(pytest.Collector):
     Collect the jasmine tests.
     '''
 
-    def __init__(self, app, url, driver_name, *args, **kwargs):
-        self.app = app
-        self.url = url
-        self.driver_name = driver_name
+    def __init__(self, suite, *args, **kwargs):
+        self.suite
         self._nodeid = url
         super(JasmineCollector, self).__init__(url, *args, **kwargs)
 
     def collect(self):
-        items = []
-        # print("Begin Jasmine collection: {}".format(self.url))
-        # with driver_ctx('phantomjs', service_args=["--debug=yes","--remote-debugger-port=9000"]) as driver:
-        #with driver_ctx('phantomjs', service_args=['--debug=yes']) as driver:
-        with server_ctxt(self.app):
-            with driver_ctx(self.driver_name, service_args=['--debug=yes']) as driver:
-                url = 'http://127.0.0.1:9280/' + self.url
-                print(url)
-                driver.get(url)
-                wait_for_results(driver)
-                for i in results(driver):
-                    items.append(JasmineItem(i['description'], self, i))
-        return items
+        if self.suite.run_server:
+            with self.run_server as server_proccess:
+                with self.run_driver() as driver:
+                    return self.collect_items(driver)
 
     def reportinfo(self):
         return ('.', False, "")
+
+    @contextlib.contextmanager
+    def run_server(self):
+        proc = multiprocessing.Process(
+            target=self.suite.app.run,
+            args=self.suite.app_args,
+            kwargs=self.suite.app_kwargs,
+        )
+        try:
+            proc.start()
+            yield proc
+        finally:
+            proc.terminate()
+
+    @contextlib.contextmanager
+    def run_driver(self):
+        '''
+        Selenium WebDriver context manager.
+        '''
+        cls = driver_class(self.suite.driver_name)
+        driver = cls(*self.suite.driver_args, **self.suite.driver_kwargs)
+        driver.set_window_size(1400, 1000)
+        yield driver
+        driver.close()
+        # TODO: Really seems like this shouldn't bee needed. At the very leasg
+        # SIGEXIT seems more appropriate but that doesnt' seem to work for some
+        # versions of phantomjs
+        driver.service.process.send_signal(signal.SIGKILL)
+        driver.quit()
+
+    @staticmethod
+    def collect_items(driver):
+        items = []
+        for url in self.suite.urls:
+            driver.get(url)
+            wait_for_results(driver)
+            for i in results(driver):
+                items.append(JasmineItem(i['description'], self, i))
+        return items
+
+    @staticmethod
+    def driver_class(name="chrome"):
+        '''
+        Lookup a WebDriver class from the given driver name
+        '''
+        mod = getattr(webdriver, name, None)
+        if not mod:
+            raise Exception
+        return mod.webdriver.WebDriver
+
+    @staticmethod
+    def wait_for_results(driver, ready_wait=False):
+        '''
+        Wait for the Jasmine test suite to finish
+        '''
+        if ready_wait:
+            WebDriverWait(driver, 100).until(
+                lambda driver:
+                driver.execute_script("return document.readyState === 'complete';")
+            )
+        WebDriverWait(driver, 100).until(
+            lambda driver:
+            driver.execute_script("return jsApiReporter.finished;")
+        )
+
+    @staticmethod
+    def results(driver):
+        '''
+        Collect Jasmine test results from the webdriver instance.
+        '''
+        batch_size = 10
+        spec_results = []
+        index = 0
+        while True:
+            results = driver.execute_script(
+                "return jsApiReporter.specResults({0}, {1})".format(
+                    index,
+                    batch_size
+                )
+            )
+            spec_results.extend(results)
+            index += len(results)
+            if not len(results) == batch_size:
+                break
+        return spec_results
 
 
 class JasminePath(FSBase):
@@ -226,10 +259,11 @@ def pytest_pycollect_makeitem(collector, name, obj):
     collector.
     '''
     url = pytest.config.option.with_jasmine
-    if url != NOOP and isinstance(obj, Jasmine):
+    if url != NOOP and isinstance(obj, JasmineTestSuite):
         if url is None:
             url = obj.url
-        return JasmineCollector(obj.app, url, obj.driver_name, parent=collector.parent)
+        return JasmineCollector(obj, parent=collector.parent)
+        #return JasmineCollector(obj.app, url, obj.driver_name, parent=collector.parent)
 
 
 def pytest_collection_modifyitems(session, config, items):
