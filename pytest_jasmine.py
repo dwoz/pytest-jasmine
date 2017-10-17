@@ -9,6 +9,7 @@ import signal
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from py._path.local import FSBase
+import multiprocessing
 
 import pytest
 
@@ -24,6 +25,23 @@ def driver_class(name="chrome"):
     if not mod:
         raise Exception
     return mod.webdriver.WebDriver
+
+
+def server_target(app, address, port):
+    app.configure({})
+    app.run(address, port, use_reloader=False, threaded=True)
+
+
+@contextlib.contextmanager
+def server_ctxt(app):
+    address = '127.0.0.1'
+    port = 9280
+    proc = multiprocessing.Process(target=server_target, args=(app, address, port))
+    try:
+        proc.start()
+        yield
+    finally:
+        proc.terminate()
 
 
 @contextlib.contextmanager
@@ -91,7 +109,8 @@ class Jasmine(object):
     Configure Jasmine test suite url
     '''
 
-    def __init__(self, url=None, driver_name='phantomjs'):
+    def __init__(self, app=None, url=None, driver_name='phantomjs'):
+        self.app = app
         self.url = url
         self.driver_name = driver_name
 
@@ -138,7 +157,8 @@ class JasmineCollector(pytest.Collector):
     Collect the jasmine tests.
     '''
 
-    def __init__(self, url, driver_name, *args, **kwargs):
+    def __init__(self, app, url, driver_name, *args, **kwargs):
+        self.app = app
         self.url = url
         self.driver_name = driver_name
         self._nodeid = url
@@ -149,11 +169,14 @@ class JasmineCollector(pytest.Collector):
         # print("Begin Jasmine collection: {}".format(self.url))
         # with driver_ctx('phantomjs', service_args=["--debug=yes","--remote-debugger-port=9000"]) as driver:
         #with driver_ctx('phantomjs', service_args=['--debug=yes']) as driver:
-        with driver_ctx(self.driver_name, service_args=['--debug=yes']) as driver:
-            driver.get(self.url)
-            wait_for_results(driver)
-            for i in results(driver):
-                items.append(JasmineItem(i['description'], self, i))
+        with server_ctxt(self.app):
+            with driver_ctx(self.driver_name, service_args=['--debug=yes']) as driver:
+                url = 'http://127.0.0.1:9280/' + self.url
+                print(url)
+                driver.get(url)
+                wait_for_results(driver)
+                for i in results(driver):
+                    items.append(JasmineItem(i['description'], self, i))
         return items
 
     def reportinfo(self):
@@ -206,7 +229,7 @@ def pytest_pycollect_makeitem(collector, name, obj):
     if url != NOOP and isinstance(obj, Jasmine):
         if url is None:
             url = obj.url
-        return JasmineCollector(url, obj.driver_name, parent=collector.parent)
+        return JasmineCollector(obj.app, url, obj.driver_name, parent=collector.parent)
 
 
 def pytest_collection_modifyitems(session, config, items):
