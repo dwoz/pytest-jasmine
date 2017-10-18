@@ -16,8 +16,6 @@ import pytest
 
 NOOP = '__pytest_jasmine_NOOP'
 
-#kwargs={'use_reloader': False, 'threaded': True}
-
 
 class JasmineException(Exception):
     '''
@@ -35,7 +33,7 @@ class JasmineTestSuite(object):
 
     @property
     def urls(self):
-        if hasattr(self, app):
+        if hasattr(self, 'app'):
             return [
                 'http://{}:{}/{}'.format(self.app_host, self.app_port, spec_pth)
                 for spec_pth in self.spec_urls
@@ -49,24 +47,36 @@ class Jasmine(JasmineTestSuite):
     '''
 
     def __init__(
-            self, app=None, app_host='127.0.0.1', app_port=8921, app_args=None,
-            app_kwargs=None, spec_urls=None, driver_name='phantomjs',
+            self, app, spec_urls, app_host='127.0.0.1', app_port=8921, app_args=None,
+            app_kwargs=None, driver_name='phantomjs',
             driver_args=None, driver_kwargs=None):
         self.app = app
         self.app_host = app_host
         self.app_port = app_port
-        self.app_args = app_args
-        self.app_kwargs = app_kwargs
+        if app_args:
+            self.app_args = app_args
+        else:
+            self.app_args = []
+        if app_kwargs:
+            self.app_kwargs = app_kwargs
+        else:
+            self.app_kwargs = {}
         self.spec_urls = spec_urls
         self.driver_name = driver_name
-        self.driver_args = driver_args
-        self.driver_kwargs = driver_kwargs
+        if driver_args:
+            self.driver_args = driver_args
+        else:
+            self.driver_args = []
+        if driver_kwargs:
+            self.driver_kwargs = driver_kwargs
+        else:
+            self.driver_kwargs = {}
 
 
-class RemoteJasmine(JasmineTests):
+class RemoteJasmine(JasmineTestSuite):
 
     def __init__(
-            self, urls=None, driver_name='phantomjs', driver_args=None
+            self, urls=None, driver_name='phantomjs', driver_args=None,
             driver_kwargs=None):
         self.spec_urls = spec_urls
         self.driver_name = driver_name
@@ -79,9 +89,10 @@ class JasmineItem(pytest.Item):
     Represents a single Jasmine test
     '''
 
-    def __init__(self, name, parent, spec):
+    def __init__(self, name, parent, spec, url=''):
         super(JasmineItem, self).__init__(name, parent)
         self.spec = spec
+        self.url = url
         #self._location = (parent.url, None, name)
 
     def runtest(self):
@@ -117,13 +128,13 @@ class JasmineCollector(pytest.Collector):
     '''
 
     def __init__(self, suite, *args, **kwargs):
-        self.suite
-        self._nodeid = url
-        super(JasmineCollector, self).__init__(url, *args, **kwargs)
+        self.suite = suite
+        #self._nodeid = url
+        super(JasmineCollector, self).__init__('jasmie', *args, **kwargs)
 
     def collect(self):
         if self.suite.run_server:
-            with self.run_server as server_proccess:
+            with self.run_server() as server_proccess:
                 with self.run_driver() as driver:
                     return self.collect_items(driver)
 
@@ -132,9 +143,10 @@ class JasmineCollector(pytest.Collector):
 
     @contextlib.contextmanager
     def run_server(self):
+        args = [self.suite.app_host, self.suite.app_port] + self.suite.app_args
         proc = multiprocessing.Process(
             target=self.suite.app.run,
-            args=self.suite.app_args,
+            args=args,
             kwargs=self.suite.app_kwargs,
         )
         try:
@@ -148,7 +160,7 @@ class JasmineCollector(pytest.Collector):
         '''
         Selenium WebDriver context manager.
         '''
-        cls = driver_class(self.suite.driver_name)
+        cls = self.driver_class(self.suite.driver_name)
         driver = cls(*self.suite.driver_args, **self.suite.driver_kwargs)
         driver.set_window_size(1400, 1000)
         yield driver
@@ -159,14 +171,13 @@ class JasmineCollector(pytest.Collector):
         driver.service.process.send_signal(signal.SIGKILL)
         driver.quit()
 
-    @staticmethod
-    def collect_items(driver):
+    def collect_items(self, driver):
         items = []
         for url in self.suite.urls:
             driver.get(url)
-            wait_for_results(driver)
-            for i in results(driver):
-                items.append(JasmineItem(i['description'], self, i))
+            self.wait_for_results(driver)
+            for i in self.results(driver):
+                items.append(JasmineItem(i['description'], self, i, url=url))
         return items
 
     @staticmethod
@@ -260,8 +271,8 @@ def pytest_pycollect_makeitem(collector, name, obj):
     '''
     url = pytest.config.option.with_jasmine
     if url != NOOP and isinstance(obj, JasmineTestSuite):
-        if url is None:
-            url = obj.url
+        #if url is None:
+        #    url = obj.url
         return JasmineCollector(obj, parent=collector.parent)
         #return JasmineCollector(obj.app, url, obj.driver_name, parent=collector.parent)
 
@@ -273,7 +284,7 @@ def pytest_collection_modifyitems(session, config, items):
     for item in items:
         if isinstance(item, JasmineItem):
             if config.option.verbose == 1:
-                name = JasminePath(item.parent.url)
+                name = JasminePath(item.url)
             else:
                 config.rootdir.join = JasminePath.alt_join.__get__(
                     config.rootdir, config.rootdir.__class__
