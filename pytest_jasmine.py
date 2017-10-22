@@ -46,6 +46,14 @@ class Jasmine(JasmineTestSuite):
     collecte Jasmine results using selenium webdriver.
     '''
 
+    REQUIRED_CAPABILIIES = {
+        "android": {
+          'chromeOptions': {
+            'androidPackage': 'com.android.chrome',
+          }
+        }
+    }
+
     def __init__(
             self, app, spec_urls, app_host='127.0.0.1', app_port=8921, app_args=None,
             app_kwargs=None, driver_name='phantomjs',
@@ -71,6 +79,12 @@ class Jasmine(JasmineTestSuite):
             self.driver_kwargs = driver_kwargs
         else:
             self.driver_kwargs = {}
+
+        # Add required capabilities if non are given. If capablities are
+        # supplied we assume the user passed what gave us what is required.
+        if self.driver_name in self.REQUIRED_CAPABLIITIES:
+            if 'capabilities' not in self.driver_kwargs:
+                self.driver_kwargs['capabilities'] = self.CAPABLITIES[self.driver_name]
 
 
 class RemoteJasmine(JasmineTestSuite):
@@ -185,6 +199,8 @@ class JasmineCollector(pytest.Collector):
         '''
         Lookup a WebDriver class from the given driver name
         '''
+        if name == 'android':
+            return webdriver.Remote
         mod = getattr(webdriver, name, None)
         if not mod:
             raise Exception
