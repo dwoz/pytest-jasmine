@@ -46,7 +46,7 @@ class Jasmine(JasmineTestSuite):
     collecte Jasmine results using selenium webdriver.
     '''
 
-    REQUIRED_CAPABILITES = {
+    REQUIRED_CAPABILITIES = {
         "android": {
           'chromeOptions': {
             'androidPackage': 'com.android.chrome',
@@ -82,7 +82,7 @@ class Jasmine(JasmineTestSuite):
 
         # Add required capabilities if non are given. If capablities are
         # supplied we assume the user passed what gave us what is required.
-        if self.driver_name in self.REQUIRED_CAPABLITIES:
+        if self.driver_name in self.REQUIRED_CAPABILITIES:
             if 'capabilities' not in self.driver_kwargs:
                 self.driver_kwargs['capabilities'] = self.CAPABLITIES[self.driver_name]
 
