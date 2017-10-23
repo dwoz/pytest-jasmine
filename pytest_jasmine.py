@@ -8,6 +8,7 @@ import signal
 
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from py._path.local import FSBase
 import multiprocessing
 
@@ -47,11 +48,12 @@ class Jasmine(JasmineTestSuite):
     '''
 
     REQUIRED_CAPABILITIES = {
+        "phantomjs": dict(DesiredCapabilities.PHANTOMJS),
         "android": {
           'chromeOptions': {
             'androidPackage': 'com.android.chrome',
           }
-        }
+        },
     }
 
     def __init__(
@@ -83,8 +85,8 @@ class Jasmine(JasmineTestSuite):
         # Add required capabilities if non are given. If capablities are
         # supplied we assume the user passed what gave us what is required.
         if self.driver_name in self.REQUIRED_CAPABILITIES:
-            if 'capabilities' not in self.driver_kwargs:
-                self.driver_kwargs['capabilities'] = self.CAPABLITIES[self.driver_name]
+            if 'desired_capabilities' not in self.driver_kwargs:
+                self.driver_kwargs['desired_capabilities'] = self.REQUIRED_CAPABILITIES[self.driver_name]
 
 
 class RemoteJasmine(JasmineTestSuite):
