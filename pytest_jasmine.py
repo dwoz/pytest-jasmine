@@ -165,6 +165,7 @@ class JasmineCollector(pytest.Collector):
             args=args,
             kwargs=self.suite.app_kwargs,
         )
+        proc.daemon = False
         try:
             proc.start()
             yield proc
