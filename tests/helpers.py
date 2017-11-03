@@ -10,7 +10,7 @@ URL = 'https://github.com/jasmine/jasmine/releases/download/v2.8.0/jasmine-stand
 SHA1 = '6a6cddd66330a550a82119e55585d37965b14a4c'
 
 
-def fetch_jasmine_standalone(url=URL, sha1=SHA1, to_path=None, folder='jasmine'):
+def fetch_jasmine_standalone(url=URL, sha1=SHA1, to_path=None, folder='static/jasmine'):
     filename = url.rsplit('/', 1)[-1]
     if to_path:
         filename = os.path.join(to_path, filename)
@@ -49,22 +49,20 @@ jasmine_test_html = '''
     <title>Jasmine Spec Runner v2.8.0</title>
     <link rel="shortcut icon"
       type="image/png"
-      href="jasmine/lib/jasmine-2.8.0/jasmine_favicon.png">
-    <link rel="stylesheet" href="jasmine/lib/jasmine-2.8.0/jasmine.css">
+      href="static/jasmine/lib/jasmine-2.8.0/jasmine_favicon.png">
+    <link rel="stylesheet" href="static/jasmine/lib/jasmine-2.8.0/jasmine.css">
     <script type="text/javascript"
       src="https://code.jquery.com/jquery-3.2.1.min.js"
       integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
       crossorigin="anonymous"></script>
     <script type="text/javascript"
-      src="jasmine/lib/jasmine-2.8.0/jasmine.js"></script>
+      src="static/jasmine/lib/jasmine-2.8.0/jasmine.js"></script>
     <script type="text/javascript"
-      src="jasmine/lib/jasmine-2.8.0/jasmine-html.js"></script>
+      src="static/jasmine/lib/jasmine-2.8.0/jasmine-html.js"></script>
     <script type="text/javascript"
-      src="jasmine/lib/jasmine-2.8.0/boot.js"></script>
-    <script type="text/javascript"
-      src="jasmine/mock-ajax.js"></script>
+      src="static/jasmine/lib/jasmine-2.8.0/boot.js"></script>
     <!-- jasmine spec files -->
-    <script src="spec.js"></script>
+    <script src="static/spec.js"></script>
   </head>
   <body>
   </body>
@@ -73,12 +71,23 @@ jasmine_test_html = '''
 
 
 flask_test_app = '''
-import Flask, abort, send_file
+from flask import Flask, abort, send_file
+from pytest_jasmine import Jasmine
 app = Flask(__name__)
+app.debug = True
 @app.route('/', methods=['GET'])
-def index(self):
+def index():
     try:
         return send_file('spec.html')
     except FileNotFoundError:
         return abort(404)
+
+
+jasmine = Jasmine(
+    app,
+    ['/'],
+    driver_name='chrome',
+    app_kwargs={'use_reloader': False, 'threaded': True},
+    driver_kwargs={'service_args': ['--debug=yes', '--remote-debugger-port=9000']}
+)
 '''

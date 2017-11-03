@@ -206,7 +206,7 @@ class JasmineCollector(pytest.Collector):
             return webdriver.Remote
         mod = getattr(webdriver, name, None)
         if not mod:
-            raise Exception
+            raise JasmineException("driver class not found")
         return mod.webdriver.WebDriver
 
     @staticmethod
